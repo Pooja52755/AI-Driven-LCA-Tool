@@ -81,7 +81,8 @@
 
 		try {
 			const result = await apiService.compareProcesses(processes);
-			comparisons = result.comparisons || [];
+			// Backend returns 'scenarios' not 'comparisons'
+			comparisons = result.scenarios || result.comparisons || [];
 			activeTab = 'comparison';
 			createToast('Process comparison completed!', 'success');
 		} catch (error) {
@@ -92,8 +93,33 @@
 		}
 	}
 
-	function setActiveTab(tabId) {
+	async function setActiveTab(tabId) {
 		activeTab = tabId;
+		
+		// Load stored comparisons when switching to comparison tab
+		if (tabId === 'comparison') {
+			await loadStoredComparisons();
+		}
+	}
+
+	async function loadStoredComparisons() {
+		try {
+			// Add getStoredComparisons method to apiService if it doesn't exist
+			const result = await apiService.getStoredComparisons();
+			
+			// Transform stored analyses into comparison format
+			if (result.analyses && result.analyses.length >= 2) {
+				comparisons = result.analyses.map(analysis => ({
+					process: analysis.input,
+					lca: analysis.results
+				}));
+			} else {
+				comparisons = [];
+			}
+		} catch (error) {
+			console.error('Failed to load stored comparisons:', error);
+			comparisons = [];
+		}
 	}
 </script>
 

@@ -42,6 +42,8 @@ class MetalProcessInput(BaseModel):
     ore_grade: Optional[float] = None
     end_of_life_option: str = "Recycling"
     recycling_rate: Optional[float] = None
+    energy_consumption: Optional[float] = None
+    transport_distance: Optional[float] = None
 
 class LCAResult(BaseModel):
     metal_type: str
@@ -74,6 +76,9 @@ class CircularityAnalysis(BaseModel):
     improvement_opportunities: List[str]
     flow_optimization: Dict[str, Any]
     recommended_actions: List[str]
+
+# Global storage for comparison data (in a real app, this would be in a database)
+stored_analyses = []
 
 # Mock ML functions
 async def calculate_lca_metrics(data: Dict[str, Any]) -> Dict[str, float]:
@@ -165,8 +170,8 @@ async def analyze_lca(process_input: MetalProcessInput):
     """Perform LCA analysis"""
     try:
         # Calculate LCA metrics
-        lca_results = await calculate_lca_metrics(process_input.dict())
-        circularity_data = await analyze_circularity(process_input.dict())
+        lca_results = await calculate_lca_metrics(process_input.model_dump())
+        circularity_data = await analyze_circularity(process_input.model_dump())
         
         # Create response
         result = LCAResult(
@@ -197,6 +202,17 @@ async def analyze_lca(process_input: MetalProcessInput):
             }
         )
         
+        # Store analysis for comparison (add to global storage)
+        analysis_record = {
+            "id": len(stored_analyses) + 1,
+            "timestamp": "2025-10-05T12:00:00Z",
+            "input": process_input.model_dump(),
+            "result": result.model_dump(),
+            "scenario_name": f"{process_input.metal_type} - {process_input.process_route}"
+        }
+        stored_analyses.append(analysis_record)
+        logger.info(f"Stored analysis #{len(stored_analyses)}: {analysis_record['scenario_name']}")
+        
         return result
         
     except Exception as e:
@@ -208,7 +224,7 @@ async def analyze_circularity_endpoint(process_input: MetalProcessInput):
     """Analyze circularity potential and optimization opportunities"""
     try:
         # Calculate circularity metrics
-        circularity_data = await analyze_circularity(process_input.dict())
+        circularity_data = await analyze_circularity(process_input.model_dump())
         
         # Enhanced circularity analysis with recommendations
         metal_type = process_input.metal_type
@@ -264,6 +280,189 @@ async def analyze_circularity_endpoint(process_input: MetalProcessInput):
     except Exception as e:
         logger.error(f"Circularity analysis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/compare")
+async def compare_processes(processes: List[MetalProcessInput]):
+    """Compare multiple metal processing scenarios"""
+    try:
+        comparison_results = []
+        
+        for i, process in enumerate(processes):
+            # Calculate LCA metrics for each process
+            lca_results = await calculate_lca_metrics(process.model_dump())
+            circularity_data = await analyze_circularity(process.model_dump())
+            
+            # Create comparison entry
+            process_result = {
+                "scenario_name": f"{process.metal_type} - {process.process_route}",
+                "metal_type": process.metal_type,
+                "process_route": process.process_route,
+                "production_capacity": process.production_capacity,
+                "energy_source": process.energy_source,
+                "lca_results": {
+                    "energy_consumption": lca_results['energy_consumption'],
+                    "co2_emissions": lca_results['co2_emissions'],
+                    "water_usage": lca_results['water_usage'],
+                    "waste_generation": lca_results['waste_generation']
+                },
+                "circularity_score": circularity_data['overall_score'],
+                "environmental_impact_score": round(
+                    100 - (lca_results['co2_emissions'] / 20 * 100), 1
+                ),  # Simple scoring: lower emissions = higher score
+                "sustainability_rating": round(
+                    (circularity_data['overall_score'] + 
+                     (100 - lca_results['co2_emissions'] / 20 * 100)) / 2, 1
+                )
+            }
+            
+            comparison_results.append(process_result)
+        
+        # Find best scenario based on sustainability rating
+        best_scenario = max(comparison_results, 
+                           key=lambda x: x['sustainability_rating'])
+        
+        # Calculate summary statistics
+        avg_co2 = sum(r['lca_results']['co2_emissions'] for r in comparison_results) / len(comparison_results)
+        avg_circularity = sum(r['circularity_score'] for r in comparison_results) / len(comparison_results)
+        
+        response = {
+            "scenarios": comparison_results,
+            "summary": {
+                "total_scenarios": len(comparison_results),
+                "best_scenario": best_scenario['scenario_name'],
+                "best_sustainability_rating": best_scenario['sustainability_rating'],
+                "average_co2_emissions": round(avg_co2, 2),
+                "average_circularity_score": round(avg_circularity, 1),
+                "improvement_potential": round(
+                    best_scenario['sustainability_rating'] - 
+                    min(r['sustainability_rating'] for r in comparison_results), 1
+                )
+            },
+            "recommendations": [
+                f"Adopt {best_scenario['metal_type'].lower()} processing approach",
+                f"Focus on {best_scenario['process_route'].lower()} route optimization",
+                "Implement energy-efficient technologies",
+                "Enhance circular economy practices"
+            ]
+        }
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Process comparison failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/comparisons")
+async def get_stored_comparisons():
+    """Get all stored analyses for comparison"""
+    try:
+        logger.info(f"Retrieving stored comparisons: {len(stored_analyses)} analyses available")
+        if len(stored_analyses) < 2:
+            return {
+                "message": "Add multiple processes from the Input tab to compare their environmental impacts.",
+                "analyses": stored_analyses,
+                "comparison_available": False
+            }
+        
+        # Generate comparison from stored analyses
+        comparison_results = []
+        
+        for analysis in stored_analyses:
+            result = analysis["result"]
+            comparison_results.append({
+                "scenario_name": analysis["scenario_name"],
+                "metal_type": result["metal_type"],
+                "process_route": result["process_route"],
+                "lca_results": {
+                    "energy_consumption": result["energy_consumption"],
+                    "co2_emissions": result["co2_emissions"],
+                    "water_usage": result["water_usage"],
+                    "waste_generation": result["waste_generation"]
+                },
+                "circularity_score": result["circularity_score"],
+                "environmental_impact_score": round(100 - (result["co2_emissions"] / 20 * 100), 1),
+                "sustainability_rating": round((result["circularity_score"] + (100 - result["co2_emissions"] / 20 * 100)) / 2, 1)
+            })
+        
+        # Find best scenario
+        best_scenario = max(comparison_results, key=lambda x: x['sustainability_rating'])
+        
+        return {
+            "scenarios": comparison_results,
+            "summary": {
+                "total_scenarios": len(comparison_results),
+                "best_scenario": best_scenario['scenario_name'],
+                "best_sustainability_rating": best_scenario['sustainability_rating']
+            },
+            "comparison_available": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get comparisons: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/test/populate")
+async def populate_test_data():
+    """Populate test data for debugging comparison functionality"""
+    global stored_analyses
+    
+    # Clear existing data
+    stored_analyses = []
+    
+    # Add test analysis 1
+    test_analysis_1 = {
+        "id": 1,
+        "timestamp": "2025-10-05T12:00:00Z",
+        "input": {"metal_type": "Copper", "process_route": "Recycled", "production_capacity": 5000},
+        "result": {
+            "metal_type": "Copper",
+            "process_route": "Recycled", 
+            "energy_consumption": 64.0,
+            "co2_emissions": 41.0,
+            "water_usage": 750.0,
+            "waste_generation": 75.0,
+            "circularity_score": 95.0,
+            "recycled_content": 85.0,
+            "resource_efficiency": 90.0
+        },
+        "scenario_name": "Copper - Recycled"
+    }
+    
+    # Add test analysis 2
+    test_analysis_2 = {
+        "id": 2,
+        "timestamp": "2025-10-05T12:05:00Z",
+        "input": {"metal_type": "Lead", "process_route": "Recycled", "production_capacity": 3000},
+        "result": {
+            "metal_type": "Lead",
+            "process_route": "Recycled",
+            "energy_consumption": 33.6,
+            "co2_emissions": 12.9,
+            "water_usage": 450.0,
+            "waste_generation": 45.0,
+            "circularity_score": 95.0,
+            "recycled_content": 80.0,
+            "resource_efficiency": 85.0
+        },
+        "scenario_name": "Lead - Recycled"
+    }
+    
+    stored_analyses.append(test_analysis_1)
+    stored_analyses.append(test_analysis_2)
+    
+    logger.info(f"Populated {len(stored_analyses)} test analyses")
+    
+    return {
+        "message": f"Populated {len(stored_analyses)} test analyses",
+        "analyses": stored_analyses
+    }
+
+@app.delete("/api/comparisons")
+async def clear_stored_comparisons():
+    """Clear all stored analyses"""
+    global stored_analyses
+    stored_analyses = []
+    return {"message": "All stored comparisons cleared"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -117,6 +117,16 @@ class ApiService {
         }
     }
     
+    // Get stored comparisons
+    async getStoredComparisons() {
+        try {
+            const response = await this.client.get('/api/comparisons');
+            return response.data;
+        } catch (error) {
+            throw new Error(`Failed to get stored comparisons: ${error.message}`);
+        }
+    }
+    
     // Get mock data
     async getMockData() {
         try {
