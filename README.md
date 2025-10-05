@@ -55,6 +55,8 @@ cd frontend && npm install && npm run dev
 http://localhost:5000/-frontend
 http://localhost:8000/-backend
 http://localhost:8000/docs
+python minimal_server.py-backend
+npm run dev-frontend
 
 
 ## 📊 Mock Data Coverage
