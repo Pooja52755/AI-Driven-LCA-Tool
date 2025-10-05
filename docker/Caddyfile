@@ -1,0 +1,27 @@
+# Caddyfile for LCA Tool
+localhost {
+    # Frontend (Svelte)
+    handle /* {
+        reverse_proxy frontend:5000
+    }
+    
+    # Backend API
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    
+    # Neo4j Browser
+    handle /neo4j/* {
+        reverse_proxy neo4j:7474
+    }
+    
+    # Enable compression
+    encode gzip
+    
+    # CORS headers for API
+    header /api/* {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+    }
+}

@@ -1,0 +1,52 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node.js / React
+node_modules/
+build/
+dist/
+.env
+.env.local
+.env.development
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / IDE settings
+.vscode/
+.idea/
+*.swp
+
+# Python / FastAPI
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+.venv/
+venv/
+.env/
+instance/
+.envrc
+
+# Jupyter / data
+.ipynb_checkpoints
+*.csv
+*.tsv
+*.xlsx
+*.h5
+*.pkl
+
+# Coverage / testing
+.coverage
+htmlcov/
+pytest_cache/
+
+# Mac system files
+*.DS_Store
