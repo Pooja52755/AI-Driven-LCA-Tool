@@ -52,6 +52,10 @@ cd backend && pip install -r requirements.txt && uvicorn main:app --reload
 # Frontend
 cd frontend && npm install && npm run dev
 ```
+http://localhost:5000/-frontend
+http://localhost:8000/-backend
+http://localhost:8000/docs
+
 
 ## 📊 Mock Data Coverage
 
